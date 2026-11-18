@@ -1,5 +1,5 @@
-const CACHE = "erdella-express-v1";
-const ASSETS = ["./", "index.html", "styles.css?v=1", "data.js?v=1", "xlsx-export.js?v=1", "app.js?v=1", "manifest.webmanifest", "icon.svg"];
+const CACHE = "erdella-express-v2";
+const ASSETS = ["./?v=2", "index.html", "styles.css?v=2", "data.js?v=2", "xlsx-export.js?v=2", "app.js?v=2", "manifest.webmanifest", "icon.svg"];
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener("fetch", event => {

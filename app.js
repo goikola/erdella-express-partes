@@ -412,9 +412,19 @@
       lists = normalizeLists(defaults); saveLists(); showMessage($("adminMessage"), "Listas originales restauradas.");
     });
 
+    const installed = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    $("installButton").hidden = installed;
     window.addEventListener("beforeinstallprompt", event => { event.preventDefault(); deferredInstall = event; $("installButton").hidden = false; });
+    window.addEventListener("appinstalled", () => { deferredInstall = null; $("installButton").hidden = true; });
     $("installButton").addEventListener("click", async () => {
-      if (!deferredInstall) return; deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; $("installButton").hidden = true;
+      if (deferredInstall) {
+        deferredInstall.prompt();
+        const choice = await deferredInstall.userChoice;
+        deferredInstall = null;
+        if (choice.outcome === "accepted") $("installButton").hidden = true;
+        return;
+      }
+      alert("Para instalarla en Android: abre esta página con Chrome, pulsa los tres puntos ⋮ y elige ‘Instalar aplicación’ o ‘Añadir a pantalla de inicio’. Se abrirá después como una aplicación independiente.");
     });
   }
 
