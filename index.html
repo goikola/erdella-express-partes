@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#075b5f">
+  <meta name="description" content="Jornadas de reparto de Erdella Express">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css?v=1">
+  <title>Erdella Express · Jornada de reparto</title>
+</head>
+<body class="auth-locked">
+  <section id="loginScreen" class="login-screen" aria-labelledby="loginTitle">
+    <div class="login-card">
+      <div class="login-mark" aria-hidden="true">E</div>
+      <p class="eyebrow login-eyebrow">ERDELLA EXPRESS</p>
+      <h1 id="loginTitle">Acceso a jornadas</h1>
+      <p>Identifícate la primera vez. Este dispositivo recordará el acceso.</p>
+      <form id="loginForm">
+        <label><span>Usuario</span><input id="loginUser" autocomplete="username" required></label>
+        <label><span>Contraseña</span><input id="loginPassword" type="password" inputmode="numeric" autocomplete="current-password" required></label>
+        <div id="loginError" class="message error" role="alert" hidden></div>
+        <button class="primary" type="submit">Entrar</button>
+      </form>
+    </div>
+  </section>
+
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">ERDELLA EXPRESS</p>
+      <h1>Jornada de reparto</h1>
+    </div>
+    <button id="installButton" class="secondary compact" type="button" hidden>Instalar</button>
+  </header>
+
+  <main>
+    <nav class="app-tabs" aria-label="Secciones">
+      <button id="workTabButton" class="app-tab active" type="button">Jornadas</button>
+      <button id="adminTabButton" class="app-tab" type="button">Administración</button>
+    </nav>
+
+    <div id="workView">
+      <section class="panel form-panel" aria-labelledby="formTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="formTitle">Nueva jornada</h2>
+            <p>El borrador se guarda automáticamente en este móvil.</p>
+          </div>
+          <button id="newButton" class="text-button" type="button">Limpiar</button>
+        </div>
+
+        <form id="workForm">
+          <input id="recordId" type="hidden">
+
+          <fieldset class="form-section">
+            <legend>Datos de la jornada</legend>
+            <div class="form-grid">
+              <label><span>Día</span><input id="date" type="date" required></label>
+              <label><span>Nombre</span><input id="worker" list="workerList" autocomplete="off" placeholder="Seleccionar o escribir" required><datalist id="workerList"></datalist></label>
+              <label><span>Matrícula</span><input id="vehicle" list="vehicleList" autocomplete="off" placeholder="Seleccionar o escribir" required><datalist id="vehicleList"></datalist></label>
+              <label><span>Centro</span><select id="center" required><option value="">Seleccionar centro…</option></select></label>
+              <label id="otherCenterField" class="wide" hidden><span>Indica el otro centro</span><input id="centerOther" autocomplete="off" placeholder="Escribe el centro"></label>
+              <label><span>Km iniciales</span><input id="startKm" type="number" min="0" step="1" inputmode="numeric" required></label>
+              <label><span>Km finales</span><input id="endKm" type="number" min="0" step="1" inputmode="numeric" required></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section shifts-section">
+            <legend>Horarios</legend>
+            <p class="section-help">Rellena sólo mañana, sólo tarde o ambos turnos.</p>
+            <div class="shift-card morning-card">
+              <h3>Mañana</h3>
+              <div class="form-grid two-cols">
+                <label><span>Hora inicio mañana</span><input id="morningStart" class="start-field" type="time"></label>
+                <label><span>Hora fin mañana</span><input id="morningEnd" class="end-field" type="time"></label>
+              </div>
+            </div>
+            <div class="shift-card afternoon-card">
+              <h3>Tarde</h3>
+              <div class="form-grid two-cols">
+                <label><span>Hora inicio tarde</span><input id="afternoonStart" class="start-field" type="time"></label>
+                <label><span>Hora fin tarde</span><input id="afternoonEnd" class="end-field" type="time"></label>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section orders-section">
+            <legend>Pedidos</legend>
+            <p class="section-help">Los tres tipos son opcionales.</p>
+            <div class="form-grid three-cols">
+              <label><span>Nº pedidos online</span><input id="onlineOrders" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></label>
+              <label><span>Nº pedidos de caja</span><input id="boxOrders" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></label>
+              <label><span>Nº pedidos especiales</span><input id="specialOrders" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section refuel-section">
+            <legend>Repostaje</legend>
+            <div class="radio-row" role="radiogroup" aria-label="Furgoneta repostada">
+              <span>¿Has repostado la furgoneta?</span>
+              <label class="radio-option"><input type="radio" name="refueled" value="No" required> No</label>
+              <label class="radio-option"><input type="radio" name="refueled" value="Sí" required> Sí</label>
+            </div>
+            <div id="refuelDetails" class="form-grid two-cols refuel-details" hidden>
+              <label><span>Km al repostar</span><input id="refuelKm" type="number" min="0" step="1" inputmode="numeric"></label>
+              <label><span>Litros</span><input id="refuelLiters" type="number" min="0" step="0.01" inputmode="decimal"></label>
+            </div>
+          </fieldset>
+
+          <label class="notes-field"><span>Observaciones</span><textarea id="notes" rows="2" placeholder="Opcional"></textarea></label>
+
+          <div class="calculated" aria-live="polite">
+            <div><span>Horas trabajadas</span><strong id="duration">—</strong></div>
+            <div><span>Km realizados</span><strong id="distance">—</strong></div>
+            <div><span>Total pedidos</span><strong id="totalOrders">0</strong></div>
+          </div>
+
+          <div id="formMessage" class="message" role="status" hidden></div>
+          <button class="primary save-button" type="submit">Guardar jornada</button>
+        </form>
+      </section>
+
+      <section class="panel records-panel" aria-labelledby="recordsTitle">
+        <div class="section-heading">
+          <div><h2 id="recordsTitle">Jornadas guardadas</h2><p id="recordCount">0 registros</p></div>
+        </div>
+        <div id="monthlyDelivery" class="monthly-delivery" hidden>
+          <div>
+            <strong>Envío mensual pendiente</strong>
+            <span id="monthlyDeliveryText"></span>
+          </div>
+          <button id="monthlyDeliveryButton" class="primary" type="button">Preparar correo</button>
+          <p id="monthlyDeliveryMessage" class="message" role="status" hidden></p>
+        </div>
+        <div class="filters">
+          <label><span>Filtrar por mes</span><input id="monthFilter" type="month"></label>
+          <button id="clearFilter" class="secondary" type="button">Ver todas</button>
+        </div>
+        <div id="recordsList" class="records-list"></div>
+        <div id="emptyState" class="empty-state"><strong>Aún no hay jornadas</strong><span>Guarda el primer registro usando el formulario.</span></div>
+        <button id="exportButton" class="primary export-button" type="button">Exportar a Excel</button>
+      </section>
+    </div>
+
+    <section id="adminView" class="panel admin-panel" hidden aria-labelledby="adminTitle">
+      <div class="section-heading"><div><h2 id="adminTitle">Administración</h2><p>Gestiona las sugerencias del formulario en este dispositivo.</p></div></div>
+      <form id="adminLoginForm" class="admin-login">
+        <label><span>Usuario administrador</span><input id="adminUser" autocomplete="username" required></label>
+        <label><span>Contraseña</span><input id="adminPassword" type="password" inputmode="numeric" autocomplete="current-password" required></label>
+        <div id="adminLoginError" class="message error" role="alert" hidden></div>
+        <button class="primary" type="submit">Entrar en administración</button>
+      </form>
+
+      <div id="adminContent" hidden>
+        <div id="adminMessage" class="message" hidden></div>
+        <section class="admin-group">
+          <div class="admin-list-heading"><h3>Trabajadores</h3><span id="adminWorkerCount"></span></div>
+          <form id="addWorkerForm" class="admin-add-form"><label><span>Nuevo trabajador</span><input id="newWorker" required></label><button class="primary" type="submit">Añadir</button></form>
+          <div id="adminWorkerList" class="admin-list"></div>
+        </section>
+        <section class="admin-group">
+          <div class="admin-list-heading"><h3>Matrículas</h3><span id="adminVehicleCount"></span></div>
+          <form id="addVehicleForm" class="admin-add-form"><label><span>Nueva matrícula</span><input id="newVehicle" required></label><button class="primary" type="submit">Añadir</button></form>
+          <div id="adminVehicleList" class="admin-list"></div>
+        </section>
+        <section class="admin-group">
+          <div class="admin-list-heading"><h3>Centros</h3><span id="adminCenterCount"></span></div>
+          <form id="addCenterForm" class="admin-add-form"><label><span>Nuevo centro</span><input id="newCenter" required></label><button class="primary" type="submit">Añadir</button></form>
+          <div id="adminCenterList" class="admin-list"></div>
+        </section>
+        <button id="restoreDefaults" class="secondary admin-reset" type="button">Restaurar listas del Excel</button>
+      </div>
+    </section>
+  </main>
+
+  <template id="recordTemplate">
+    <article class="record-card">
+      <div class="record-top"><div><strong class="record-date"></strong><span class="record-worker"></span></div><span class="record-center"></span></div>
+      <div class="record-route"><strong class="record-vehicle"></strong><span class="record-shifts"></span></div>
+      <div class="record-metrics"><span><b class="record-hours"></b><small>Horas</small></span><span><b class="record-km"></b><small>Kilómetros</small></span><span><b class="record-orders"></b><small>Pedidos</small></span></div>
+      <p class="record-refuel"></p><p class="record-notes"></p>
+      <div class="record-actions"><button class="text-button edit-record" type="button">Editar</button><button class="danger-button delete-record" type="button">Eliminar</button></div>
+    </article>
+  </template>
+
+  <script src="data.js?v=1"></script>
+  <script src="xlsx-export.js?v=1"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>

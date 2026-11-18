@@ -1,0 +1,13 @@
+{
+  "name": "Erdella Express · Jornadas de reparto",
+  "short_name": "Erdella Express",
+  "description": "Registro móvil de jornadas, pedidos y repostajes",
+  "lang": "es",
+  "start_url": "./?v=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f2f7f6",
+  "theme_color": "#075b5f",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
