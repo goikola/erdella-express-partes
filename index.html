@@ -7,7 +7,7 @@
   <meta name="description" content="Jornadas de reparto de Erdella Express">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
   <title>Erdella Express · Jornada de reparto</title>
 </head>
 <body class="auth-locked">
@@ -41,6 +41,14 @@
     </nav>
 
     <div id="workView">
+      <section id="missingDayReminder" class="missing-day-reminder" aria-live="polite" hidden>
+        <div>
+          <strong>Parte pendiente</strong>
+          <span id="missingDayReminderText"></span>
+        </div>
+        <button id="enableNotificationsButton" class="secondary compact" type="button">Activar avisos</button>
+      </section>
+
       <section class="panel form-panel" aria-labelledby="formTitle">
         <div class="section-heading">
           <div>
@@ -213,8 +221,8 @@
     </section>
   </template>
 
-  <script src="data.js?v=3"></script>
-  <script src="xlsx-export.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="data.js?v=4"></script>
+  <script src="xlsx-export.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

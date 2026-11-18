@@ -9,7 +9,8 @@
     lists: "erdellaExpressListsV1",
     lastWorker: "erdellaExpressLastWorkerV1",
     lastVehicle: "erdellaExpressLastVehicleV1",
-    monthlySent: "erdellaExpressMonthlySentV1"
+    monthlySent: "erdellaExpressMonthlySentV1",
+    reminderShown: "erdellaExpressReminderShownV1"
   };
   const LOGIN = { user: "express", password: "3000" };
   const ADMIN = { user: "etor", password: "1974" };
@@ -24,6 +25,7 @@
   let lists = normalizeLists(readJson(KEYS.lists, defaults));
   let adminUnlocked = false;
   let deferredInstall = null;
+  const pendingNotifications = new Set();
 
   const fields = {
     id: $("recordId"), date: $("date"), worker: $("worker"), vehicle: $("vehicle"),
@@ -57,6 +59,61 @@
   function today() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
+  function localDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+  function daysAgo(amount, from = new Date()) {
+    const date = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    date.setDate(date.getDate() - amount);
+    return date;
+  }
+  function reminderDates(now = new Date()) {
+    const dates = [];
+    const yesterday = daysAgo(1, now);
+    if (yesterday.getDay() !== 6) dates.push(localDateKey(yesterday));
+
+    // El parte del sábado no vence hasta el martes y sigue pendiente hasta que se guarde.
+    const daysSinceSaturday = (now.getDay() + 1) % 7;
+    if (daysSinceSaturday >= 3) dates.push(localDateKey(daysAgo(daysSinceSaturday, now)));
+    return [...new Set(dates)].sort();
+  }
+  function pendingReminderDates(now = new Date()) {
+    const worker = (localStorage.getItem(KEYS.lastWorker) || "").trim();
+    if (!worker) return [];
+    return reminderDates(now).filter(date => !records.some(record =>
+      record.date === date && String(record.worker || "").localeCompare(worker, "es", { sensitivity: "base" }) === 0
+    ));
+  }
+  function reminderText(dates) {
+    const labels = dates.map(displayDate);
+    if (labels.length === 1) return `Falta guardar la jornada del ${labels[0]}.`;
+    return `Faltan guardar las jornadas del ${labels.slice(0, -1).join(", ")} y ${labels.at(-1)}.`;
+  }
+  async function showSystemReminder(dates) {
+    if (!("Notification" in window) || Notification.permission !== "granted" || !dates.length) return;
+    const shown = readJson(KEYS.reminderShown, {});
+    const key = `${today()}:${dates.join(",")}`;
+    if (shown[key] || pendingNotifications.has(key)) return;
+    pendingNotifications.add(key);
+    try {
+      const registration = "serviceWorker" in navigator ? await navigator.serviceWorker.ready : null;
+      const options = { body: reminderText(dates), icon: "icon.svg", badge: "icon.svg", tag: `parte-pendiente-${dates.join("-")}` };
+      if (registration) await registration.showNotification("Erdella Express · Parte pendiente", options);
+      else new Notification("Erdella Express · Parte pendiente", options);
+      saveJson(KEYS.reminderShown, { [key]: new Date().toISOString() });
+    } catch { /* El aviso visible dentro de la aplicación permanece disponible. */ }
+    finally { pendingNotifications.delete(key); }
+  }
+  function renderMissingDayReminder() {
+    const reminder = $("missingDayReminder");
+    const dates = pendingReminderDates();
+    reminder.hidden = !dates.length;
+    if (!dates.length) return;
+    $("missingDayReminderText").textContent = reminderText(dates) + " Los sábados se pueden completar hasta el martes.";
+    const button = $("enableNotificationsButton");
+    button.hidden = !("Notification" in window) || Notification.permission === "granted";
+    showSystemReminder(dates);
   }
   function uid() { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
   function asNumber(value) { return value === "" || value == null ? null : Number(value); }
@@ -182,6 +239,7 @@
     document.body.classList.remove("auth-locked");
     $("loginScreen").hidden = true;
     renderMonthlyDelivery();
+    renderMissingDayReminder();
   }
   function initAccess() {
     if (localStorage.getItem(KEYS.access) === "ok") showApp();
@@ -499,6 +557,7 @@
       if (!lists.vehicles.includes(record.vehicle)) lists.vehicles.push(record.vehicle);
       saveLists(); renderRecords();
       renderMonthlyDelivery();
+      renderMissingDayReminder();
       resetForm(true); showMessage($("formMessage"), "Jornada guardada correctamente.");
     });
     $("monthFilter").addEventListener("change", renderRecords);
@@ -511,6 +570,17 @@
       window.ExpressXlsx.download(selected, `Erdella-Express-${suffix}.xlsx`, minutesBetween);
     });
     $("monthlyDeliveryButton").addEventListener("click", prepareMonthlyDelivery);
+    $("enableNotificationsButton").addEventListener("click", async () => {
+      if (!("Notification" in window)) return;
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        $("enableNotificationsButton").hidden = true;
+        await showSystemReminder(pendingReminderDates());
+      } else {
+        $("enableNotificationsButton").textContent = "Avisos bloqueados en Chrome";
+        $("enableNotificationsButton").disabled = true;
+      }
+    });
 
     $("adminLoginForm").addEventListener("submit", event => {
       event.preventDefault();
@@ -549,7 +619,11 @@
     if (!restoreDraft()) resetForm(true);
     renderRecords();
     renderMonthlyDelivery();
-    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+    renderMissingDayReminder();
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) window.addEventListener("load", async () => {
+      await navigator.serviceWorker.register("sw.js");
+      showSystemReminder(pendingReminderDates());
+    });
   }
   init();
 })();

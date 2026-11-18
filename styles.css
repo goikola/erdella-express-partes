@@ -101,6 +101,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shado
 .monthly-delivery span { margin-top: 4px; color: var(--muted); font-size: .8rem; line-height: 1.4; }
 .monthly-delivery .primary { width: 100%; }
 .monthly-delivery .message { margin: 0; }
+.missing-day-reminder { display: grid; gap: 10px; margin: 0 0 16px; border: 1px solid #e7ad4b; border-radius: 14px; padding: 14px; background: linear-gradient(135deg, #fff4d6, #fffaf0); box-shadow: 0 7px 20px rgba(109, 72, 10, .08); }
+.missing-day-reminder strong, .missing-day-reminder span { display: block; }
+.missing-day-reminder strong { color: #714708; }
+.missing-day-reminder span { margin-top: 4px; color: #765c2e; font-size: .86rem; line-height: 1.45; }
+.missing-day-reminder .secondary { width: 100%; border-color: #d89931; background: #fff; color: #714708; }
 .filters { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; margin-bottom: 14px; }
 .records-list { display: grid; gap: 11px; }
 .record-card { border: 1px solid var(--line); border-radius: 15px; padding: 14px; background: white; }
