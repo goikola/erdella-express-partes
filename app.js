@@ -50,6 +50,7 @@
     const centers = legacyCenters.filter(item => !["Varios centros", "Arenas", "Getxo", "Zalla", "Balmaseda"].includes(item));
     if (legacyCenters.some(item => ["Arenas", "Getxo", "Arenas-Getxo"].includes(item))) centers.push("Arenas-Getxo");
     if (legacyCenters.some(item => ["Zalla", "Balmaseda", "Zalla-Balmaseda"].includes(item))) centers.push("Zalla-Balmaseda");
+    if (!centers.includes("Trobika (Mungia)")) centers.push("Trobika (Mungia)");
     return {
       workers: unique(value?.workers?.length ? value.workers : defaults.workers),
       vehicles: unique(value?.vehicles?.length ? value.vehicles : defaults.vehicles).map(value => value.toUpperCase()),

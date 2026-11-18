@@ -4,7 +4,7 @@
   "description": "Registro móvil de jornadas, pedidos y repostajes",
   "lang": "es",
   "id": "./",
-  "start_url": "./?v=4",
+  "start_url": "./?v=5",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],

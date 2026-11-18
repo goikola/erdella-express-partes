@@ -32,5 +32,5 @@ window.EXPRESS_DATA = {
     "8001KWR", "8435MMP", "8555LJX", "8877MKZ", "8878MKZ", "8881MKZ",
     "8888MKZ", "8896MKZ"
   ],
-  centers: ["Arenas-Getxo", "Artea", "Bilbondo", "Gorliz", "Llodio", "Zalla-Balmaseda", "Otras"]
+  centers: ["Arenas-Getxo", "Artea", "Bilbondo", "Gorliz", "Llodio", "Trobika (Mungia)", "Zalla-Balmaseda", "Otras"]
 };
