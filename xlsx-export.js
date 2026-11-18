@@ -99,28 +99,42 @@
   }
 
   function numberCell(reference, value, style = 0) {
+    if (value === "" || value == null) return textCell(reference, "", style);
     const number = Number(value);
     return Number.isFinite(number) ? `<c r="${reference}" s="${style}"><v>${number}</v></c>` : textCell(reference, "", style);
   }
 
   function build(records, minutesBetween) {
     const headers = [
-      "FECHA", "TRABAJADOR", "MATRÍCULA", "CENTRO", "KM INICIALES", "KM FINALES", "KM REALIZADOS",
-      "INICIO MAÑANA", "FIN MAÑANA", "MINUTOS MAÑANA", "INICIO TARDE", "FIN TARDE", "MINUTOS TARDE", "MINUTOS TOTAL",
-      "PEDIDOS ONLINE", "PEDIDOS CAJA", "PEDIDOS ESPECIALES", "PEDIDOS TOTAL", "REPOSTADO", "KM AL REPOSTAR", "LITROS", "OBSERVACIONES"
+      "FECHA", "TRABAJADOR", "LÍNEA", "MATRÍCULA", "CENTRO", "HORA INICIO", "HORA FIN", "MINUTOS",
+      "KM INICIALES", "KM FINALES", "KM REALIZADOS", "PEDIDOS ONLINE", "PEDIDOS CAJA", "PEDIDOS ESPECIALES",
+      "PEDIDOS TOTAL", "REPOSTADO", "KM AL REPOSTAR", "LITROS", "OBSERVACIONES"
     ];
     const headerCells = headers.map((value, index) => textCell(`${columnName(index + 1)}1`, value, 1)).join("");
-    const rows = records
-      .slice()
-      .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.worker).localeCompare(String(b.worker), "es"))
-      .map((record, index) => {
+    const rowData = [];
+    const sorted = records.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.worker).localeCompare(String(b.worker), "es"));
+    for (const record of sorted) {
+      const multiple = record.center === "Varios centros";
+      const details = multiple ? (record.centerLines || []) : [];
+      const center = record.center === "Otras" ? (record.centerOther || "Otras") : record.center;
+      const firstStart = multiple ? (details[0]?.startTime || "") : (record.morningStart || record.afternoonStart || "");
+      const lastEnd = multiple ? (details.at(-1)?.endTime || "") : (record.afternoonEnd || record.morningEnd || "");
+      const minutes = multiple
+        ? details.reduce((total, line) => total + minutesBetween(line.startTime, line.endTime), 0)
+        : minutesBetween(record.morningStart, record.morningEnd) + minutesBetween(record.afternoonStart, record.afternoonEnd);
+      const distance = multiple
+        ? details.reduce((total, line) => total + (Number(line.endKm) - Number(line.startKm)), 0)
+        : Number(record.endKm) - Number(record.startKm);
+      const totalOrders = Number(record.onlineOrders || 0) + Number(record.boxOrders || 0) + Number(record.specialOrders || 0);
+      rowData.push([record.date, record.worker, "RESUMEN", record.vehicle, center, firstStart, lastEnd, minutes, multiple ? "" : record.startKm, multiple ? "" : record.endKm, distance, record.onlineOrders || 0, record.boxOrders || 0, record.specialOrders || 0, totalOrders, record.refueled, record.refuelKm, record.refuelLiters, record.notes]);
+      details.forEach((line, index) => {
+        const lineCenter = line.center === "Otras" ? (line.centerOther || "Otras") : line.center;
+        rowData.push([record.date, record.worker, index + 1, record.vehicle, lineCenter, line.startTime, line.endTime, minutesBetween(line.startTime, line.endTime), line.startKm, line.endKm, Number(line.endKm) - Number(line.startKm), "", "", "", "", "", "", "", ""]);
+      });
+    }
+    const numericColumns = new Set([8, 9, 10, 11, 12, 13, 14, 15, 17, 18]);
+    const rows = rowData.map((values, index) => {
         const row = index + 2;
-        const morningMinutes = minutesBetween(record.morningStart, record.morningEnd);
-        const afternoonMinutes = minutesBetween(record.afternoonStart, record.afternoonEnd);
-        const totalOrders = Number(record.onlineOrders || 0) + Number(record.boxOrders || 0) + Number(record.specialOrders || 0);
-        const center = record.center === "Otras" ? (record.centerOther || "Otras") : record.center;
-        const values = [record.date, record.worker, record.vehicle, center, record.startKm, record.endKm, Number(record.endKm) - Number(record.startKm), record.morningStart, record.morningEnd, morningMinutes, record.afternoonStart, record.afternoonEnd, afternoonMinutes, morningMinutes + afternoonMinutes, record.onlineOrders || 0, record.boxOrders || 0, record.specialOrders || 0, totalOrders, record.refueled, record.refuelKm, record.refuelLiters, record.notes];
-        const numericColumns = new Set([5, 6, 7, 10, 13, 14, 15, 16, 17, 18, 20, 21]);
         const cells = values.map((value, cellIndex) => {
           const ref = `${columnName(cellIndex + 1)}${row}`;
           return numericColumns.has(cellIndex + 1) ? numberCell(ref, value) : textCell(ref, value);
@@ -128,9 +142,9 @@
         return `<row r="${row}">${cells}</row>`;
       }).join("");
 
-    const lastRow = Math.max(1, records.length + 1);
+    const lastRow = Math.max(1, rowData.length + 1);
     const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="34" customWidth="1"/><col min="3" max="4" width="20" customWidth="1"/><col min="5" max="21" width="17" customWidth="1"/><col min="22" max="22" width="40" customWidth="1"/></cols><sheetData><row r="1" ht="32" customHeight="1">${headerCells}</row>${rows}</sheetData><autoFilter ref="A1:V${lastRow}"/></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="34" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="5" width="21" customWidth="1"/><col min="6" max="18" width="17" customWidth="1"/><col min="19" max="19" width="40" customWidth="1"/></cols><sheetData><row r="1" ht="32" customHeight="1">${headerCells}</row>${rows}</sheetData><autoFilter ref="A1:S${lastRow}"/></worksheet>`;
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="10"/><name val="Aptos"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF006B61"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
     const files = [
       { name: "[Content_Types].xml", data: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },

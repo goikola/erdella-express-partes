@@ -14,6 +14,7 @@
   const LOGIN = { user: "express", password: "3000" };
   const ADMIN = { user: "etor", password: "1974" };
   const MONTHLY_RECIPIENT = "distribucion@erdellaexpres.com";
+  const MULTI_CENTER = "Varios centros";
   const defaults = {
     workers: [...window.EXPRESS_DATA.workers],
     vehicles: [...window.EXPRESS_DATA.vehicles],
@@ -42,10 +43,15 @@
       .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
   }
   function normalizeLists(value) {
+    const sourceCenters = value?.centers?.length ? value.centers : defaults.centers;
+    const legacyCenters = sourceCenters.map(item => String(item || "").trim()).filter(Boolean);
+    const centers = legacyCenters.filter(item => !["Varios centros", "Arenas", "Getxo", "Zalla", "Balmaseda"].includes(item));
+    if (legacyCenters.some(item => ["Arenas", "Getxo", "Arenas-Getxo"].includes(item))) centers.push("Arenas-Getxo");
+    if (legacyCenters.some(item => ["Zalla", "Balmaseda", "Zalla-Balmaseda"].includes(item))) centers.push("Zalla-Balmaseda");
     return {
       workers: unique(value?.workers?.length ? value.workers : defaults.workers),
       vehicles: unique(value?.vehicles?.length ? value.vehicles : defaults.vehicles).map(value => value.toUpperCase()),
-      centers: unique(value?.centers?.length ? value.centers : defaults.centers)
+      centers: unique(centers)
     };
   }
   function today() {
@@ -69,7 +75,12 @@
     return minutes;
   }
   function totalMinutes(record) {
+    if (record.center === MULTI_CENTER) return (record.centerLines || []).reduce((total, line) => total + minutesBetween(line.startTime, line.endTime), 0);
     return minutesBetween(record.morningStart, record.morningEnd) + minutesBetween(record.afternoonStart, record.afternoonEnd);
+  }
+  function totalDistance(record) {
+    if (record.center === MULTI_CENTER) return (record.centerLines || []).reduce((total, line) => total + Math.max(0, Number(line.endKm) - Number(line.startKm)), 0);
+    return record.startKm != null && record.endKm != null ? Math.max(0, Number(record.endKm) - Number(record.startKm)) : null;
   }
   function durationLabel(minutes) {
     if (!minutes) return "—";
@@ -80,7 +91,10 @@
     const [year, month, day] = value.split("-");
     return `${day}/${month}/${year}`;
   }
-  function centerLabel(record) { return record.center === "Otras" ? (record.centerOther || "Otras") : record.center; }
+  function centerLabel(record) {
+    if (record.center === MULTI_CENTER) return `${MULTI_CENTER} (${(record.centerLines || []).length})`;
+    return record.center === "Otras" ? (record.centerOther || "Otras") : record.center;
+  }
   function totalOrders(record) { return orderNumber(record.onlineOrders) + orderNumber(record.boxOrders) + orderNumber(record.specialOrders); }
 
   function monthKey(date) {
@@ -188,8 +202,9 @@
     $("workerList").replaceChildren(...lists.workers.map(value => new Option(value, value)));
     $("vehicleList").replaceChildren(...lists.vehicles.map(value => new Option(value, value)));
     const selected = fields.center.value;
-    fields.center.replaceChildren(new Option("Seleccionar centro…", ""), ...lists.centers.map(value => new Option(value, value)));
-    if (lists.centers.includes(selected)) fields.center.value = selected;
+    fields.center.replaceChildren(new Option("Seleccionar centro…", ""), new Option(MULTI_CENTER, MULTI_CENTER), ...lists.centers.map(value => new Option(value, value)));
+    if (selected === MULTI_CENTER || lists.centers.includes(selected)) fields.center.value = selected;
+    centerLines().forEach(line => fillLineCenterSelect(line.querySelector(".line-center"), line.querySelector(".line-center").value));
   }
   function saveLists() {
     lists = normalizeLists(lists);
@@ -197,11 +212,78 @@
     fillLists(); renderAdmin();
   }
 
+  const centerLines = () => [...$("centerLines").querySelectorAll(".center-line")];
+  function fillLineCenterSelect(select, selected = "") {
+    select.replaceChildren(new Option("Seleccionar centro…", ""), ...lists.centers.map(value => new Option(value, value)));
+    if (lists.centers.includes(selected)) select.value = selected;
+  }
+  function renumberCenterLines() {
+    centerLines().forEach((line, index) => { line.querySelector(".center-line-title").textContent = `Centro ${index + 1}`; });
+  }
+  function toggleLineOther(line) {
+    const other = line.querySelector(".line-center").value === "Otras";
+    const label = line.querySelector(".line-center-other-label");
+    const input = line.querySelector(".line-center-other");
+    label.hidden = !other; input.required = other;
+    if (!other) input.value = "";
+  }
+  function readCenterLine(line) {
+    return {
+      center: line.querySelector(".line-center").value,
+      centerOther: line.querySelector(".line-center-other").value.trim(),
+      startTime: line.querySelector(".line-start-time").value,
+      endTime: line.querySelector(".line-end-time").value,
+      startKm: asNumber(line.querySelector(".line-start-km").value),
+      endKm: asNumber(line.querySelector(".line-end-km").value)
+    };
+  }
+  function refreshCenterLine(line) {
+    const data = readCenterLine(line);
+    line.querySelector(".line-duration").textContent = durationLabel(minutesBetween(data.startTime, data.endTime));
+    line.querySelector(".line-distance").textContent = data.startKm != null && data.endKm != null && data.endKm >= data.startKm ? `${(data.endKm - data.startKm).toLocaleString("es-ES")} km` : "—";
+  }
+  function createCenterLine(data = {}) {
+    const line = $("centerLineTemplate").content.firstElementChild.cloneNode(true);
+    const select = line.querySelector(".line-center");
+    fillLineCenterSelect(select, data.center || "");
+    line.querySelector(".line-center-other").value = data.centerOther || "";
+    line.querySelector(".line-start-time").value = data.startTime || "";
+    line.querySelector(".line-end-time").value = data.endTime || "";
+    line.querySelector(".line-start-km").value = data.startKm ?? "";
+    line.querySelector(".line-end-km").value = data.endKm ?? "";
+    select.addEventListener("change", () => { toggleLineOther(line); refreshCenterLine(line); refreshCalculations(); saveDraft(); });
+    line.querySelectorAll("input").forEach(input => input.addEventListener("input", () => { refreshCenterLine(line); refreshCalculations(); saveDraft(); }));
+    line.querySelector(".remove-center-line").addEventListener("click", () => {
+      line.remove();
+      if (!centerLines().length && fields.center.value === MULTI_CENTER) createCenterLine();
+      renumberCenterLines(); refreshCalculations(); saveDraft();
+    });
+    $("centerLines").append(line);
+    toggleLineOther(line); refreshCenterLine(line); renumberCenterLines();
+    return line;
+  }
+  function toggleMultipleCenters() {
+    const multiple = fields.center.value === MULTI_CENTER;
+    $("mainStartKmField").hidden = multiple;
+    $("mainEndKmField").hidden = multiple;
+    $("mainShifts").hidden = multiple;
+    $("multipleCenters").hidden = !multiple;
+    fields.startKm.required = !multiple; fields.endKm.required = !multiple;
+    if (multiple) {
+      fields.startKm.value = ""; fields.endKm.value = "";
+      fields.morningStart.value = ""; fields.morningEnd.value = "";
+      fields.afternoonStart.value = ""; fields.afternoonEnd.value = "";
+      if (!centerLines().length) createCenterLine();
+    } else {
+      $("centerLines").replaceChildren();
+    }
+  }
   function toggleOtherCenter() {
     const isOther = fields.center.value === "Otras";
     $("otherCenterField").hidden = !isOther;
     fields.centerOther.required = isOther;
     if (!isOther) fields.centerOther.value = "";
+    toggleMultipleCenters();
   }
   function toggleRefuel() {
     const yes = selectedRefuel() === "Sí";
@@ -224,6 +306,7 @@
       morningEnd: fields.morningEnd.value,
       afternoonStart: fields.afternoonStart.value,
       afternoonEnd: fields.afternoonEnd.value,
+      centerLines: fields.center.value === MULTI_CENTER ? centerLines().map(readCenterLine) : [],
       onlineOrders: orderNumber(fields.onlineOrders.value),
       boxOrders: orderNumber(fields.boxOrders.value),
       specialOrders: orderNumber(fields.specialOrders.value),
@@ -249,6 +332,11 @@
     fields.vehicle.value = record.vehicle || "";
     fields.center.value = record.center || "";
     toggleOtherCenter(); fields.centerOther.value = record.centerOther || "";
+    if (fields.center.value === MULTI_CENTER) {
+      $("centerLines").replaceChildren();
+      const savedLines = Array.isArray(record.centerLines) ? record.centerLines : [];
+      if (savedLines.length) savedLines.forEach(createCenterLine); else createCenterLine();
+    }
     fields.startKm.value = record.startKm ?? ""; fields.endKm.value = record.endKm ?? "";
     fields.morningStart.value = record.morningStart || ""; fields.morningEnd.value = record.morningEnd || "";
     fields.afternoonStart.value = record.afternoonStart || ""; fields.afternoonEnd.value = record.afternoonEnd || "";
@@ -272,15 +360,27 @@
   function validate(record) {
     if (!record.date || !record.worker || !record.vehicle || !record.center) return "Completa día, nombre, matrícula y centro.";
     if (record.center === "Otras" && !record.centerOther) return "Indica el nombre del otro centro.";
-    if (record.startKm == null || record.endKm == null) return "Completa los kilómetros iniciales y finales.";
-    if (record.endKm < record.startKm) return "Los kilómetros finales no pueden ser menores que los iniciales.";
-    const morningPartial = Boolean(record.morningStart) !== Boolean(record.morningEnd);
-    const afternoonPartial = Boolean(record.afternoonStart) !== Boolean(record.afternoonEnd);
-    if (morningPartial) return "Completa las dos horas del turno de mañana o deja ambas vacías.";
-    if (afternoonPartial) return "Completa las dos horas del turno de tarde o deja ambas vacías.";
-    if (!record.morningStart && !record.afternoonStart) return "Completa al menos un turno: mañana o tarde.";
-    if (record.morningStart && minutesBetween(record.morningStart, record.morningEnd) === 0) return "Las horas de mañana no pueden ser iguales.";
-    if (record.afternoonStart && minutesBetween(record.afternoonStart, record.afternoonEnd) === 0) return "Las horas de tarde no pueden ser iguales.";
+    if (record.center === MULTI_CENTER) {
+      if (!record.centerLines.length) return "Añade al menos una línea de centro.";
+      for (let index = 0; index < record.centerLines.length; index++) {
+        const line = record.centerLines[index];
+        const label = `centro ${index + 1}`;
+        if (!line.center || !line.startTime || !line.endTime || line.startKm == null || line.endKm == null) return `Completa todos los datos del ${label}.`;
+        if (line.center === "Otras" && !line.centerOther) return `Indica el nombre del ${label}.`;
+        if (line.endKm < line.startKm) return `Los kilómetros finales del ${label} no pueden ser menores que los iniciales.`;
+        if (minutesBetween(line.startTime, line.endTime) === 0) return `La hora inicial y final del ${label} no pueden ser iguales.`;
+      }
+    } else {
+      if (record.startKm == null || record.endKm == null) return "Completa los kilómetros iniciales y finales.";
+      if (record.endKm < record.startKm) return "Los kilómetros finales no pueden ser menores que los iniciales.";
+      const morningPartial = Boolean(record.morningStart) !== Boolean(record.morningEnd);
+      const afternoonPartial = Boolean(record.afternoonStart) !== Boolean(record.afternoonEnd);
+      if (morningPartial) return "Completa las dos horas del turno de mañana o deja ambas vacías.";
+      if (afternoonPartial) return "Completa las dos horas del turno de tarde o deja ambas vacías.";
+      if (!record.morningStart && !record.afternoonStart) return "Completa al menos un turno: mañana o tarde.";
+      if (record.morningStart && minutesBetween(record.morningStart, record.morningEnd) === 0) return "Las horas de mañana no pueden ser iguales.";
+      if (record.afternoonStart && minutesBetween(record.afternoonStart, record.afternoonEnd) === 0) return "Las horas de tarde no pueden ser iguales.";
+    }
     if (!record.refueled) return "Indica si has repostado la furgoneta.";
     if (record.refueled === "Sí" && (record.refuelKm == null || record.refuelLiters == null || record.refuelLiters <= 0)) return "Completa los kilómetros y litros del repostaje.";
     return "";
@@ -288,7 +388,8 @@
   function refreshCalculations() {
     const record = currentRecord();
     $("duration").textContent = durationLabel(totalMinutes(record));
-    $("distance").textContent = record.startKm != null && record.endKm != null && record.endKm >= record.startKm ? `${(record.endKm - record.startKm).toLocaleString("es-ES")} km` : "—";
+    const distance = totalDistance(record);
+    $("distance").textContent = distance == null ? "—" : `${distance.toLocaleString("es-ES")} km`;
     $("totalOrders").textContent = totalOrders(record).toLocaleString("es-ES");
   }
 
@@ -305,12 +406,25 @@
       card.querySelector(".record-center").textContent = centerLabel(record);
       card.querySelector(".record-vehicle").textContent = record.vehicle;
       const shifts = [];
-      if (record.morningStart) shifts.push(`Mañana ${record.morningStart}–${record.morningEnd}`);
-      if (record.afternoonStart) shifts.push(`Tarde ${record.afternoonStart}–${record.afternoonEnd}`);
+      if (record.center === MULTI_CENTER) {
+        const lines = record.centerLines || [];
+        if (lines.length) shifts.push(`${lines[0].startTime}–${lines.at(-1).endTime}`);
+      } else {
+        if (record.morningStart) shifts.push(`Mañana ${record.morningStart}–${record.morningEnd}`);
+        if (record.afternoonStart) shifts.push(`Tarde ${record.afternoonStart}–${record.afternoonEnd}`);
+      }
       card.querySelector(".record-shifts").textContent = shifts.join(" · ");
       card.querySelector(".record-hours").textContent = durationLabel(totalMinutes(record));
-      card.querySelector(".record-km").textContent = `${(record.endKm - record.startKm).toLocaleString("es-ES")} km`;
+      card.querySelector(".record-km").textContent = `${(totalDistance(record) || 0).toLocaleString("es-ES")} km`;
       card.querySelector(".record-orders").textContent = totalOrders(record).toLocaleString("es-ES");
+      const extra = card.querySelector(".record-extra");
+      if (record.center === MULTI_CENTER) {
+        extra.hidden = false;
+        extra.querySelector(".record-extra-detail").textContent = (record.centerLines || []).map((line, index) => {
+          const name = line.center === "Otras" ? (line.centerOther || "Otras") : line.center;
+          return `${index + 1}. ${name} · ${line.startTime}–${line.endTime} · ${(line.endKm - line.startKm).toLocaleString("es-ES")} km`;
+        }).join("\n");
+      }
       card.querySelector(".record-refuel").textContent = record.refueled === "Sí" ? `Repostaje: ${record.refuelLiters.toLocaleString("es-ES")} L a los ${record.refuelKm.toLocaleString("es-ES")} km` : "Sin repostaje";
       card.querySelector(".record-notes").textContent = record.notes || "";
       card.querySelector(".edit-record").addEventListener("click", () => loadRecord(record));
@@ -367,7 +481,8 @@
     $("newButton").addEventListener("click", () => {
       if (confirm("¿Limpiar el formulario actual?")) resetForm(true);
     });
-    fields.center.addEventListener("change", () => { toggleOtherCenter(); saveDraft(); });
+    fields.center.addEventListener("change", () => { toggleOtherCenter(); refreshCalculations(); saveDraft(); });
+    $("addCenterLine").addEventListener("click", () => { createCenterLine(); refreshCalculations(); saveDraft(); });
     document.querySelectorAll('input[name="refueled"]').forEach(input => input.addEventListener("change", () => { toggleRefuel(); saveDraft(); }));
     $("workForm").addEventListener("input", () => { refreshCalculations(); saveDraft(); });
     $("workForm").addEventListener("change", () => { refreshCalculations(); saveDraft(); });

@@ -7,7 +7,7 @@
   <meta name="description" content="Jornadas de reparto de Erdella Express">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
   <title>Erdella Express · Jornada de reparto</title>
 </head>
 <body class="auth-locked">
@@ -61,12 +61,12 @@
               <label><span>Matrícula</span><input id="vehicle" list="vehicleList" autocomplete="off" placeholder="Seleccionar o escribir" required><datalist id="vehicleList"></datalist></label>
               <label><span>Centro</span><select id="center" required><option value="">Seleccionar centro…</option></select></label>
               <label id="otherCenterField" class="wide" hidden><span>Indica el otro centro</span><input id="centerOther" autocomplete="off" placeholder="Escribe el centro"></label>
-              <label><span>Km iniciales</span><input id="startKm" type="number" min="0" step="1" inputmode="numeric" required></label>
-              <label><span>Km finales</span><input id="endKm" type="number" min="0" step="1" inputmode="numeric" required></label>
+              <label id="mainStartKmField"><span>Km iniciales</span><input id="startKm" type="number" min="0" step="1" inputmode="numeric" required></label>
+              <label id="mainEndKmField"><span>Km finales</span><input id="endKm" type="number" min="0" step="1" inputmode="numeric" required></label>
             </div>
           </fieldset>
 
-          <fieldset class="form-section shifts-section">
+          <fieldset id="mainShifts" class="form-section shifts-section">
             <legend>Horarios</legend>
             <p class="section-help">Rellena sólo mañana, sólo tarde o ambos turnos.</p>
             <div class="shift-card morning-card">
@@ -83,6 +83,13 @@
                 <label><span>Hora fin tarde</span><input id="afternoonEnd" class="end-field" type="time"></label>
               </div>
             </div>
+          </fieldset>
+
+          <fieldset id="multipleCenters" class="form-section multiple-centers" hidden>
+            <legend>Centros del día</legend>
+            <p class="section-help">Añade una línea por cada centro, con sus horas y kilómetros.</p>
+            <div id="centerLines" class="center-lines"></div>
+            <button id="addCenterLine" class="secondary add-center-line" type="button">Añadir otro centro</button>
           </fieldset>
 
           <fieldset class="form-section orders-section">
@@ -179,13 +186,35 @@
       <div class="record-top"><div><strong class="record-date"></strong><span class="record-worker"></span></div><span class="record-center"></span></div>
       <div class="record-route"><strong class="record-vehicle"></strong><span class="record-shifts"></span></div>
       <div class="record-metrics"><span><b class="record-hours"></b><small>Horas</small></span><span><b class="record-km"></b><small>Kilómetros</small></span><span><b class="record-orders"></b><small>Pedidos</small></span></div>
+      <div class="record-extra" hidden><strong>Centros realizados</strong><span class="record-extra-detail"></span></div>
       <p class="record-refuel"></p><p class="record-notes"></p>
       <div class="record-actions"><button class="text-button edit-record" type="button">Editar</button><button class="danger-button delete-record" type="button">Eliminar</button></div>
     </article>
   </template>
 
-  <script src="data.js?v=2"></script>
-  <script src="xlsx-export.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+  <template id="centerLineTemplate">
+    <section class="center-line">
+      <div class="center-line-heading">
+        <strong class="center-line-title">Centro 1</strong>
+        <button class="remove-center-line danger-button" type="button">Quitar línea</button>
+      </div>
+      <div class="form-grid center-line-grid">
+        <label class="wide"><span>Centro</span><select class="line-center" required></select></label>
+        <label class="wide line-center-other-label" hidden><span>Indica el otro centro</span><input class="line-center-other" autocomplete="off" placeholder="Escribe el centro"></label>
+        <label><span>Hora inicio</span><input class="line-start-time" type="time" required></label>
+        <label><span>Hora fin</span><input class="line-end-time" type="time" required></label>
+        <label><span>Km iniciales</span><input class="line-start-km" type="number" min="0" step="1" inputmode="numeric" required></label>
+        <label><span>Km finales</span><input class="line-end-km" type="number" min="0" step="1" inputmode="numeric" required></label>
+      </div>
+      <div class="calculated line-calculated" aria-live="polite">
+        <div><span>Horas</span><strong class="line-duration">—</strong></div>
+        <div><span>Km realizados</span><strong class="line-distance">—</strong></div>
+      </div>
+    </section>
+  </template>
+
+  <script src="data.js?v=3"></script>
+  <script src="xlsx-export.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
