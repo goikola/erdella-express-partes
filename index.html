@@ -7,7 +7,7 @@
   <meta name="description" content="Jornadas de reparto de Erdella Express">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
   <title>Erdella Express · Jornada de reparto</title>
 </head>
 <body class="auth-locked">
@@ -100,7 +100,7 @@
             <button id="addCenterLine" class="secondary add-center-line" type="button">Añadir otro centro</button>
           </fieldset>
 
-          <fieldset class="form-section orders-section">
+          <fieldset id="mainOrders" class="form-section orders-section">
             <legend>Pedidos</legend>
             <p class="section-help">Los tres tipos son opcionales.</p>
             <div class="form-grid three-cols">
@@ -213,16 +213,20 @@
         <label><span>Hora fin</span><input class="line-end-time" type="time" required></label>
         <label><span>Km iniciales</span><input class="line-start-km" type="number" min="0" step="1" inputmode="numeric" required></label>
         <label><span>Km finales</span><input class="line-end-km" type="number" min="0" step="1" inputmode="numeric" required></label>
+        <label><span>Nº pedidos online</span><input class="line-online-orders" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></label>
+        <label><span>Nº pedidos de caja</span><input class="line-box-orders" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></label>
+        <label><span>Nº pedidos especiales</span><input class="line-special-orders" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></label>
       </div>
       <div class="calculated line-calculated" aria-live="polite">
         <div><span>Horas</span><strong class="line-duration">—</strong></div>
         <div><span>Km realizados</span><strong class="line-distance">—</strong></div>
+        <div><span>Pedidos</span><strong class="line-orders-total">0</strong></div>
       </div>
     </section>
   </template>
 
-  <script src="data.js?v=5"></script>
-  <script src="xlsx-export.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="data.js?v=6"></script>
+  <script src="xlsx-export.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

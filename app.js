@@ -153,7 +153,14 @@
     if (record.center === MULTI_CENTER) return `${MULTI_CENTER} (${(record.centerLines || []).length})`;
     return record.center === "Otras" ? (record.centerOther || "Otras") : record.center;
   }
-  function totalOrders(record) { return orderNumber(record.onlineOrders) + orderNumber(record.boxOrders) + orderNumber(record.specialOrders); }
+  function totalOrders(record) {
+    if (record.center === MULTI_CENTER && Array.isArray(record.centerLines)) {
+      const lineTotal = record.centerLines.reduce((total, line) => total + orderNumber(line.onlineOrders) + orderNumber(line.boxOrders) + orderNumber(line.specialOrders), 0);
+      const hasLineOrders = record.centerLines.some(line => line.onlineOrders != null || line.boxOrders != null || line.specialOrders != null);
+      if (hasLineOrders) return lineTotal;
+    }
+    return orderNumber(record.onlineOrders) + orderNumber(record.boxOrders) + orderNumber(record.specialOrders);
+  }
 
   function monthKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -293,13 +300,17 @@
       startTime: line.querySelector(".line-start-time").value,
       endTime: line.querySelector(".line-end-time").value,
       startKm: asNumber(line.querySelector(".line-start-km").value),
-      endKm: asNumber(line.querySelector(".line-end-km").value)
+      endKm: asNumber(line.querySelector(".line-end-km").value),
+      onlineOrders: orderNumber(line.querySelector(".line-online-orders").value),
+      boxOrders: orderNumber(line.querySelector(".line-box-orders").value),
+      specialOrders: orderNumber(line.querySelector(".line-special-orders").value)
     };
   }
   function refreshCenterLine(line) {
     const data = readCenterLine(line);
     line.querySelector(".line-duration").textContent = durationLabel(minutesBetween(data.startTime, data.endTime));
     line.querySelector(".line-distance").textContent = data.startKm != null && data.endKm != null && data.endKm >= data.startKm ? `${(data.endKm - data.startKm).toLocaleString("es-ES")} km` : "—";
+    line.querySelector(".line-orders-total").textContent = (data.onlineOrders + data.boxOrders + data.specialOrders).toLocaleString("es-ES");
   }
   function createCenterLine(data = {}) {
     const line = $("centerLineTemplate").content.firstElementChild.cloneNode(true);
@@ -310,6 +321,9 @@
     line.querySelector(".line-end-time").value = data.endTime || "";
     line.querySelector(".line-start-km").value = data.startKm ?? "";
     line.querySelector(".line-end-km").value = data.endKm ?? "";
+    line.querySelector(".line-online-orders").value = data.onlineOrders || "";
+    line.querySelector(".line-box-orders").value = data.boxOrders || "";
+    line.querySelector(".line-special-orders").value = data.specialOrders || "";
     select.addEventListener("change", () => { toggleLineOther(line); refreshCenterLine(line); refreshCalculations(); saveDraft(); });
     line.querySelectorAll("input").forEach(input => input.addEventListener("input", () => { refreshCenterLine(line); refreshCalculations(); saveDraft(); }));
     line.querySelector(".remove-center-line").addEventListener("click", () => {
@@ -326,6 +340,7 @@
     $("mainStartKmField").hidden = multiple;
     $("mainEndKmField").hidden = multiple;
     $("mainShifts").hidden = multiple;
+    $("mainOrders").hidden = multiple;
     $("multipleCenters").hidden = !multiple;
     fields.startKm.required = !multiple; fields.endKm.required = !multiple;
     if (multiple) {
@@ -352,6 +367,10 @@
     if (!yes) { fields.refuelKm.value = ""; fields.refuelLiters.value = ""; }
   }
   function currentRecord() {
+    const lines = fields.center.value === MULTI_CENTER ? centerLines().map(readCenterLine) : [];
+    const onlineOrders = fields.center.value === MULTI_CENTER ? lines.reduce((total, line) => total + line.onlineOrders, 0) : orderNumber(fields.onlineOrders.value);
+    const boxOrders = fields.center.value === MULTI_CENTER ? lines.reduce((total, line) => total + line.boxOrders, 0) : orderNumber(fields.boxOrders.value);
+    const specialOrders = fields.center.value === MULTI_CENTER ? lines.reduce((total, line) => total + line.specialOrders, 0) : orderNumber(fields.specialOrders.value);
     return {
       id: fields.id.value || uid(),
       date: fields.date.value,
@@ -365,10 +384,10 @@
       morningEnd: fields.morningEnd.value,
       afternoonStart: fields.afternoonStart.value,
       afternoonEnd: fields.afternoonEnd.value,
-      centerLines: fields.center.value === MULTI_CENTER ? centerLines().map(readCenterLine) : [],
-      onlineOrders: orderNumber(fields.onlineOrders.value),
-      boxOrders: orderNumber(fields.boxOrders.value),
-      specialOrders: orderNumber(fields.specialOrders.value),
+      centerLines: lines,
+      onlineOrders,
+      boxOrders,
+      specialOrders,
       refueled: selectedRefuel(),
       refuelKm: asNumber(fields.refuelKm.value),
       refuelLiters: asNumber(fields.refuelLiters.value),
@@ -393,7 +412,13 @@
     toggleOtherCenter(); fields.centerOther.value = record.centerOther || "";
     if (fields.center.value === MULTI_CENTER) {
       $("centerLines").replaceChildren();
-      const savedLines = Array.isArray(record.centerLines) ? record.centerLines : [];
+      const savedLines = Array.isArray(record.centerLines) ? record.centerLines.map(line => ({ ...line })) : [];
+      const hasSavedLineOrders = savedLines.some(line => line.onlineOrders != null || line.boxOrders != null || line.specialOrders != null);
+      if (savedLines.length && !hasSavedLineOrders) {
+        savedLines[0].onlineOrders = orderNumber(record.onlineOrders);
+        savedLines[0].boxOrders = orderNumber(record.boxOrders);
+        savedLines[0].specialOrders = orderNumber(record.specialOrders);
+      }
       if (savedLines.length) savedLines.forEach(createCenterLine); else createCenterLine();
     }
     fields.startKm.value = record.startKm ?? ""; fields.endKm.value = record.endKm ?? "";
@@ -481,7 +506,8 @@
         extra.hidden = false;
         extra.querySelector(".record-extra-detail").textContent = (record.centerLines || []).map((line, index) => {
           const name = line.center === "Otras" ? (line.centerOther || "Otras") : line.center;
-          return `${index + 1}. ${name} · ${line.startTime}–${line.endTime} · ${(line.endKm - line.startKm).toLocaleString("es-ES")} km`;
+          const orders = orderNumber(line.onlineOrders) + orderNumber(line.boxOrders) + orderNumber(line.specialOrders);
+          return `${index + 1}. ${name} · ${line.startTime}–${line.endTime} · ${(line.endKm - line.startKm).toLocaleString("es-ES")} km · ${orders.toLocaleString("es-ES")} pedidos`;
         }).join("\n");
       }
       card.querySelector(".record-refuel").textContent = record.refueled === "Sí" ? `Repostaje: ${record.refuelLiters.toLocaleString("es-ES")} L a los ${record.refuelKm.toLocaleString("es-ES")} km` : "Sin repostaje";

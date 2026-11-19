@@ -125,11 +125,22 @@
       const distance = multiple
         ? details.reduce((total, line) => total + (Number(line.endKm) - Number(line.startKm)), 0)
         : Number(record.endKm) - Number(record.startKm);
-      const totalOrders = Number(record.onlineOrders || 0) + Number(record.boxOrders || 0) + Number(record.specialOrders || 0);
-      rowData.push([record.date, record.worker, "RESUMEN", record.vehicle, center, firstStart, lastEnd, minutes, multiple ? "" : record.startKm, multiple ? "" : record.endKm, distance, record.onlineOrders || 0, record.boxOrders || 0, record.specialOrders || 0, totalOrders, record.refueled, record.refuelKm, record.refuelLiters, record.notes]);
+      const onlineOrders = multiple ? details.reduce((total, line) => total + Number(line.onlineOrders || 0), 0) : Number(record.onlineOrders || 0);
+      const boxOrders = multiple ? details.reduce((total, line) => total + Number(line.boxOrders || 0), 0) : Number(record.boxOrders || 0);
+      const specialOrders = multiple ? details.reduce((total, line) => total + Number(line.specialOrders || 0), 0) : Number(record.specialOrders || 0);
+      const hasLineOrders = details.some(line => line.onlineOrders != null || line.boxOrders != null || line.specialOrders != null);
+      const summaryOnline = multiple && !hasLineOrders ? Number(record.onlineOrders || 0) : onlineOrders;
+      const summaryBox = multiple && !hasLineOrders ? Number(record.boxOrders || 0) : boxOrders;
+      const summarySpecial = multiple && !hasLineOrders ? Number(record.specialOrders || 0) : specialOrders;
+      const totalOrders = summaryOnline + summaryBox + summarySpecial;
+      rowData.push([record.date, record.worker, "RESUMEN", record.vehicle, center, firstStart, lastEnd, minutes, multiple ? "" : record.startKm, multiple ? "" : record.endKm, distance, summaryOnline, summaryBox, summarySpecial, totalOrders, record.refueled, record.refuelKm, record.refuelLiters, record.notes]);
       details.forEach((line, index) => {
         const lineCenter = line.center === "Otras" ? (line.centerOther || "Otras") : line.center;
-        rowData.push([record.date, record.worker, index + 1, record.vehicle, lineCenter, line.startTime, line.endTime, minutesBetween(line.startTime, line.endTime), line.startKm, line.endKm, Number(line.endKm) - Number(line.startKm), "", "", "", "", "", "", "", ""]);
+        const lineOnline = line.onlineOrders == null ? "" : Number(line.onlineOrders || 0);
+        const lineBox = line.boxOrders == null ? "" : Number(line.boxOrders || 0);
+        const lineSpecial = line.specialOrders == null ? "" : Number(line.specialOrders || 0);
+        const lineTotal = lineOnline === "" && lineBox === "" && lineSpecial === "" ? "" : Number(lineOnline || 0) + Number(lineBox || 0) + Number(lineSpecial || 0);
+        rowData.push([record.date, record.worker, index + 1, record.vehicle, lineCenter, line.startTime, line.endTime, minutesBetween(line.startTime, line.endTime), line.startKm, line.endKm, Number(line.endKm) - Number(line.startKm), lineOnline, lineBox, lineSpecial, lineTotal, "", "", "", ""]);
       });
     }
     const numericColumns = new Set([8, 9, 10, 11, 12, 13, 14, 15, 17, 18]);
