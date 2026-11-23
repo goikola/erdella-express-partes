@@ -5,27 +5,43 @@
   const KEYS = {
     access: "erdellaExpressAccessV1",
     records: "erdellaExpressRecordsV1",
+    recordsBackup: "erdellaExpressRecordsBackupV1",
     draft: "erdellaExpressDraftV1",
     lists: "erdellaExpressListsV1",
     lastWorker: "erdellaExpressLastWorkerV1",
     lastVehicle: "erdellaExpressLastVehicleV1",
     monthlySent: "erdellaExpressMonthlySentV1",
-    reminderShown: "erdellaExpressReminderShownV1"
+    reminderShown: "erdellaExpressReminderShownV1",
+    cloudDeletions: "erdellaExpressCloudDeletionsV1",
+    cloudDevice: "erdellaExpressCloudDeviceV1"
   };
   const LOGIN = { user: "express", password: "3000" };
   const ADMIN = { user: "etor", password: "1974" };
   const MONTHLY_RECIPIENT = "distribucion@erdellaexpres.com";
   const MULTI_CENTER = "Varios centros";
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBjT_49FR1Fxq6kuph4n8L2SGje1WxYxJs",
+    authDomain: "partes-trabajo-erdella.firebaseapp.com",
+    databaseURL: "https://partes-trabajo-erdella-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "partes-trabajo-erdella",
+    storageBucket: "partes-trabajo-erdella.firebasestorage.app",
+    messagingSenderId: "466779972722",
+    appId: "1:466779972722:web:14db41bbe079d869408eeb"
+  };
   const defaults = {
     workers: [...window.EXPRESS_DATA.workers],
     vehicles: [...window.EXPRESS_DATA.vehicles],
     centers: [...window.EXPRESS_DATA.centers]
   };
-  let records = readJson(KEYS.records, []);
+  let records = readProtectedRecords();
   let lists = normalizeLists(readJson(KEYS.lists, defaults));
   let adminUnlocked = false;
   let deferredInstall = null;
   const pendingNotifications = new Set();
+  let cloudUser = null;
+  let cloudReadyPromise = null;
+  let cloudSyncPromise = null;
+  let draftSyncTimer = null;
 
   const fields = {
     id: $("recordId"), date: $("date"), worker: $("worker"), vehicle: $("vehicle"),
@@ -40,6 +56,139 @@
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
   }
   function saveJson(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+  function readProtectedRecords() {
+    for (const key of [KEYS.records, KEYS.recordsBackup]) {
+      const value = readJson(key, null);
+      if (Array.isArray(value)) return value;
+    }
+    return [];
+  }
+  function saveProtectedRecords(value = records) {
+    const serialized = JSON.stringify(value);
+    const previous = localStorage.getItem(KEYS.records);
+    if (previous) localStorage.setItem(KEYS.recordsBackup, previous);
+    localStorage.setItem(KEYS.records, serialized);
+    localStorage.setItem(KEYS.recordsBackup, serialized);
+  }
+  function setCloudStatus(text, error = false) {
+    const box = $("cloudStatus");
+    if (!box) return;
+    box.textContent = text;
+    box.classList.toggle("error", error);
+    box.style.background = error ? "#fff1cf" : "#dff3e4";
+    box.style.color = error ? "#704b00" : "#155d2c";
+  }
+  const cloudRecordKey = id => String(id).replace(/[.#$\[\]/]/g, "_");
+  function pendingCloudDeletions() {
+    const value = readJson(KEYS.cloudDeletions, []);
+    return Array.isArray(value) ? value : [];
+  }
+  function rememberCloudDeletion(id) {
+    saveJson(KEYS.cloudDeletions, [...new Set([...pendingCloudDeletions(), id])]);
+  }
+  function cloudDeviceName() {
+    return localStorage.getItem(KEYS.lastWorker) || fields.worker.value || "Dispositivo sin identificar";
+  }
+  function initializeCloudSync() {
+    if (cloudReadyPromise) return cloudReadyPromise;
+    cloudReadyPromise = new Promise(resolve => {
+      if (!window.firebase?.auth || !window.firebase?.database) { resolve(null); return; }
+      try {
+        const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = app.auth();
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+        const stop = auth.onAuthStateChanged(async user => {
+          if (!user) {
+            try { await auth.signInAnonymously(); }
+            catch (error) { console.warn("No se pudo iniciar la sincronización.", error); resolve(null); }
+            return;
+          }
+          stop(); cloudUser = user; localStorage.setItem(KEYS.cloudDevice, user.uid); resolve(user);
+          syncExistingRecords().catch(error => {
+            setCloudStatus("Guardado en el móvil. La copia en la nube está pendiente.", true);
+            console.warn("La copia en la nube está pendiente.", error);
+          });
+        }, error => { console.warn("No se pudo iniciar la sincronización.", error); resolve(null); });
+      } catch (error) { console.warn("La sincronización no está disponible.", error); resolve(null); }
+    });
+    return cloudReadyPromise;
+  }
+  async function syncRecord(record) {
+    const user = cloudUser || await initializeCloudSync();
+    if (!user) return false;
+    await firebase.database().ref(`expressDevices/${user.uid}`).update({
+      [`records/${cloudRecordKey(record.id)}`]: record,
+      draft: null,
+      "metadata/name": record.worker || cloudDeviceName(),
+      "metadata/lastSeen": firebase.database.ServerValue.TIMESTAMP
+    });
+    return true;
+  }
+  async function syncDraft(draft) {
+    const user = cloudUser || await initializeCloudSync();
+    if (!user) return false;
+    await firebase.database().ref(`expressDevices/${user.uid}`).update({
+      draft: { ...draft, savedAt: firebase.database.ServerValue.TIMESTAMP },
+      "metadata/name": draft.worker || cloudDeviceName(),
+      "metadata/lastSeen": firebase.database.ServerValue.TIMESTAMP
+    });
+    return true;
+  }
+  function scheduleDraftSync(draft) {
+    clearTimeout(draftSyncTimer);
+    draftSyncTimer = setTimeout(() => syncDraft(draft).catch(error => {
+      setCloudStatus("Borrador guardado en el móvil; copia en nube pendiente.", true);
+      console.warn("El borrador queda pendiente de sincronizar.", error);
+    }), 700);
+  }
+  async function removeCloudRecord(id) {
+    const user = cloudUser || await initializeCloudSync();
+    if (!user) return false;
+    await firebase.database().ref(`expressDevices/${user.uid}/records/${cloudRecordKey(id)}`).remove();
+    saveJson(KEYS.cloudDeletions, pendingCloudDeletions().filter(item => item !== id));
+    return true;
+  }
+  async function syncExistingRecords() {
+    if (cloudSyncPromise) return cloudSyncPromise;
+    cloudSyncPromise = (async () => {
+      const user = cloudUser || await initializeCloudSync();
+      if (!user) { setCloudStatus("Guardado local activo. No se pudo conectar con la copia en la nube.", true); return false; }
+      setCloudStatus("Comprobando la copia de seguridad…");
+      const deviceRef = firebase.database().ref(`expressDevices/${user.uid}`);
+      const snapshot = await deviceRef.once("value");
+      const remote = snapshot.val() || {};
+      const deleted = new Set(pendingCloudDeletions());
+      const merged = new Map();
+      const keepNewest = record => {
+        if (!record?.id || deleted.has(record.id)) return;
+        const previous = merged.get(record.id);
+        if (!previous || String(record.updatedAt || "") >= String(previous.updatedAt || "")) merged.set(record.id, record);
+      };
+      records.forEach(keepNewest);
+      Object.values(remote.records || {}).forEach(keepNewest);
+      records = [...merged.values()];
+      saveProtectedRecords();
+      if (!localStorage.getItem(KEYS.draft) && remote.draft && typeof remote.draft === "object") {
+        const { savedAt, ...remoteDraft } = remote.draft;
+        saveJson(KEYS.draft, remoteDraft);
+        const formIsEmpty = !fields.center.value && !fields.morningStart.value && !fields.afternoonStart.value && !fields.startKm.value && !fields.endKm.value;
+        if (formIsEmpty) restoreDraft();
+      }
+      const updates = {};
+      records.forEach(record => { updates[`records/${cloudRecordKey(record.id)}`] = record; });
+      pendingCloudDeletions().forEach(id => { updates[`records/${cloudRecordKey(id)}`] = null; });
+      const localDraft = readJson(KEYS.draft, null);
+      if (localDraft) updates.draft = { ...localDraft, savedAt: firebase.database.ServerValue.TIMESTAMP };
+      updates["metadata/name"] = cloudDeviceName();
+      updates["metadata/lastSeen"] = firebase.database.ServerValue.TIMESTAMP;
+      await deviceRef.update(updates);
+      localStorage.removeItem(KEYS.cloudDeletions);
+      renderRecords(); setCloudStatus("Copia de seguridad en la nube al día.");
+      return true;
+    })();
+    try { return await cloudSyncPromise; }
+    finally { cloudSyncPromise = null; }
+  }
   function unique(values) {
     return [...new Set((values || []).map(value => String(value || "").trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
@@ -395,7 +544,11 @@
       updatedAt: new Date().toISOString()
     };
   }
-  function saveDraft() { saveJson(KEYS.draft, currentRecord()); }
+  function saveDraft() {
+    const draft = currentRecord();
+    saveJson(KEYS.draft, draft);
+    scheduleDraftSync(draft);
+  }
   function clearDraft() { localStorage.removeItem(KEYS.draft); }
   function restoreDraft() {
     const draft = readJson(KEYS.draft, null);
@@ -515,7 +668,9 @@
       card.querySelector(".edit-record").addEventListener("click", () => loadRecord(record));
       card.querySelector(".delete-record").addEventListener("click", () => {
         if (!confirm(`¿Eliminar la jornada del ${displayDate(record.date)}?`)) return;
-        records = records.filter(item => item.id !== record.id); saveJson(KEYS.records, records); renderRecords();
+        records = records.filter(item => item.id !== record.id); saveProtectedRecords(); rememberCloudDeletion(record.id);
+        removeCloudRecord(record.id).catch(error => console.warn("La eliminación queda pendiente de sincronizar.", error));
+        renderRecords();
       });
       list.append(card);
     }
@@ -571,21 +726,34 @@
     document.querySelectorAll('input[name="refueled"]').forEach(input => input.addEventListener("change", () => { toggleRefuel(); saveDraft(); }));
     $("workForm").addEventListener("input", () => { refreshCalculations(); saveDraft(); });
     $("workForm").addEventListener("change", () => { refreshCalculations(); saveDraft(); });
-    $("workForm").addEventListener("submit", event => {
+    $("workForm").addEventListener("submit", async event => {
       event.preventDefault();
       const record = currentRecord();
       const error = validate(record);
       if (error) { showMessage($("formMessage"), error, true); return; }
       const existingIndex = records.findIndex(item => item.id === record.id);
       if (existingIndex >= 0) records[existingIndex] = record; else records.push(record);
-      saveJson(KEYS.records, records);
+      try { saveProtectedRecords(); }
+      catch (error) {
+        showMessage($("formMessage"), "No se pudo guardar la jornada en este móvil. No cierres la aplicación y vuelve a intentarlo.", true);
+        console.error("Falló el guardado local.", error); return;
+      }
       localStorage.setItem(KEYS.lastWorker, record.worker); localStorage.setItem(KEYS.lastVehicle, record.vehicle);
       if (!lists.workers.some(value => value.localeCompare(record.worker, "es", { sensitivity: "base" }) === 0)) lists.workers.push(record.worker);
       if (!lists.vehicles.includes(record.vehicle)) lists.vehicles.push(record.vehicle);
       saveLists(); renderRecords();
       renderMonthlyDelivery();
       renderMissingDayReminder();
-      resetForm(true); showMessage($("formMessage"), "Jornada guardada correctamente.");
+      resetForm(true); showMessage($("formMessage"), "Jornada guardada en el móvil. Copiando en la nube…");
+      try {
+        await syncRecord(record);
+        setCloudStatus("Copia de seguridad en la nube al día.");
+        showMessage($("formMessage"), "Jornada guardada en el móvil y en la nube.");
+      } catch (error) {
+        setCloudStatus("Guardado en el móvil. La copia en la nube está pendiente.", true);
+        showMessage($("formMessage"), "Jornada guardada en el móvil. Se copiará en la nube al recuperar conexión.", true);
+        console.warn("La jornada queda pendiente de sincronizar.", error);
+      }
     });
     $("monthFilter").addEventListener("change", renderRecords);
     $("clearFilter").addEventListener("click", () => { $("monthFilter").value = ""; renderRecords(); });
@@ -628,6 +796,13 @@
     $("installButton").hidden = installed;
     window.addEventListener("beforeinstallprompt", event => { event.preventDefault(); deferredInstall = event; $("installButton").hidden = false; });
     window.addEventListener("appinstalled", () => { deferredInstall = null; $("installButton").hidden = true; });
+    window.addEventListener("focus", () => syncExistingRecords().catch(() => {}));
+    window.addEventListener("pageshow", () => syncExistingRecords().catch(() => {}));
+    window.addEventListener("online", () => syncExistingRecords().catch(() => {}));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") syncExistingRecords().catch(() => {});
+      else saveDraft();
+    });
     $("installButton").addEventListener("click", async () => {
       if (deferredInstall) {
         deferredInstall.prompt();
@@ -642,6 +817,7 @@
 
   function init() {
     initAccess(); fillLists(); initEvents();
+    initializeCloudSync();
     fields.date.value = today();
     if (!restoreDraft()) resetForm(true);
     renderRecords();
