@@ -1,12 +1,12 @@
-const CACHE = "erdella-express-v7";
+const CACHE = "erdella-express-v8";
 const FIREBASE_ASSETS = [
   "https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js",
   "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js",
   "https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"
 ];
-const ASSETS = ["./?v=7", "index.html", "styles.css?v=6", "data.js?v=6", "xlsx-export.js?v=6", "app.js?v=7", "manifest.webmanifest", "icon.svg", ...FIREBASE_ASSETS];
+const ASSETS = ["./?v=8", "index.html", "styles.css?v=6", "data.js?v=6", "xlsx-export.js?v=6", "app.js?v=8", "manifest.webmanifest?v=8", "icon.svg", "icon-192.png", "icon-512.png", ...FIREBASE_ASSETS];
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
-self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
+self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE && /^erdella-express-v\d+$/.test(key)).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || (url.origin !== self.location.origin && !FIREBASE_ASSETS.includes(url.href))) return;

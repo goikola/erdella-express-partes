@@ -811,7 +811,7 @@
         if (choice.outcome === "accepted") $("installButton").hidden = true;
         return;
       }
-      alert("Para instalarla en Android: abre esta página con Chrome, pulsa los tres puntos ⋮ y elige ‘Instalar aplicación’ o ‘Añadir a pantalla de inicio’. Se abrirá después como una aplicación independiente.");
+      alert("En Android, abre este enlace en Chrome. Pulsa ⋮, luego «Añadir a pantalla de inicio» y elige «Instalar» si aparece. Si solo ves «Crear acceso directo», puedes añadir un icono sin instalar la app.");
     });
   }
 
